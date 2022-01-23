@@ -1,2 +1,2 @@
 # decision-tree-dash
-A Decision tree viewer and animator in Dash
+A Decision tree vis with outputs looking like ![tree_vis.png]
