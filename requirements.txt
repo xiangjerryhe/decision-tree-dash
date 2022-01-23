@@ -1,6 +1,6 @@
 pandas==1.4.0
 dash
-dash_bootstrap_components
+dash-bootstrap-components
 dash-extensions
 dash-cytoscape
 scikit-learn
