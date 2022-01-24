@@ -33,11 +33,6 @@ newdat = pd.get_dummies(dat, columns=cat_vars+['title'])
 
 derived = [c for c in newdat.columns.tolist() if '_' in c]
 
-
-newdat[derived].sum()
-
-
-
 columns2drop = ['Pclass_2', 'Embarked_Q', 'Sex_female', 'Sex_female', 'title_other']
 
 
@@ -70,7 +65,8 @@ def excel_colname_iter():
     for i in count(2):
         yield from product(ua, repeat=i)
 
-def tree_to_mermaid(tree, feature_names, target_name='Survived'):
+def tree2vis(tree, feature_names, target_name='Survived'):
+    """Converts scikit learn decision tree to both mermaid & cytoscape formats for visualization"""
     from sklearn.tree import _tree
     import sys
     tree_ = tree.tree_
@@ -84,30 +80,46 @@ def tree_to_mermaid(tree, feature_names, target_name='Survived'):
         feature_names[i] if i != _tree.TREE_UNDEFINED else "undefined!"
         for i in tree_.feature
     ]
+    cyto_nodes = []
+    cyto_edges = []
     def walk(node):
         if tree_.feature[node] != _tree.TREE_UNDEFINED:
             name = feature_name[node]
             treshold = tree_.threshold[node]
             X = next(e_iter)
             feature2letter[name]=X
+            if abs(treshold - 0.5) < 0.01:
+                cyto_nodes.append({"data": {"id": X, "label": name}})
+            else:
+                cyto_nodes.append({"data": {"id": X, "label": "%s @ %.1f" %(name, treshold)}})
             seen_features.add(name)
             f1 = "{X}[{name}]".format(X=X, name=name)
             write(f1)
             write(";\n")
+            try:
+                cyto_edges[-1]['data']['target']=X
+            except:
+                pass
             write("{f1}-->|{thresh}| ".format(f1=f1, thresh="<=%.1f" % treshold))
+            cyto_edges.append({"data": {"source": X, "label":"%s <= %.1f" % (name, treshold)}})
             walk(tree_.children_left[node])
             write(";\n")
             write("{f1}-->|{thresh}| ".format(f1="{X}[{name}]".format(X=X, name=name), thresh=">%.1f" % treshold))
+            cyto_edges.append({"data": {"source": X, "label":"%s > %.1f" % (name, treshold)}})
             walk(tree_.children_right[node])
         else:
-            name = target_name+": "+str((tree_.value[node][0]>0.001)[0])
+            results = tree_.value[node][0]
+            name = target_name+": "+str(results[0] > results[1])
             if name in seen_features:
                 X = feature2letter[name]
+                cyto_edges[-1]['data']['target']=X
                 f1 = "{X}[{name}]".format(X=X, name=name)
                 write(f1)
             else:
                 X = next(e_iter)
                 feature2letter[name]=X
+                cyto_nodes.append({"data": {"id": X, "label": name}})
+                cyto_edges[-1]['data']['target']=X
                 seen_features.add(name)
                 f1 = "{X}[{name}]".format(X=X, name=name)
                 write(f1)
@@ -115,15 +127,27 @@ def tree_to_mermaid(tree, feature_names, target_name='Survived'):
     contents = output.getvalue()
     output.close()
     st = contents.index("\n")
-    return "graph TD;\n" +contents[st+1:]
+    return {"mermaid":"graph TD;\n" +contents[st+1:], 
+             "cyto":cyto_nodes+cyto_edges}
 
-from dash import Dash
+from dash import Dash,html
 from dash_extensions import Mermaid
+import dash_cytoscape as cyto
 
+cyto.load_extra_layouts()
 app = Dash()
-app.layout = Mermaid(chart=tree_to_mermaid(clf, dependent_variables))
+
+vis_data = tree2vis(clf, dependent_variables)
+app.layout = html.Div([
+Mermaid(chart=vis_data['mermaid']),
+cyto.Cytoscape(
+                id="decision-tree",
+                layout={"name": "dagre"},
+                style={"width": "100%", "height": "400px"},
+                elements=vis_data['cyto'],
+            )
+])
+            
 
 if __name__ == "__main__":
     app.run_server()
-
-
