@@ -172,6 +172,38 @@ cyto.Cytoscape(
                 id="decision-tree",
                 layout={"name": "dagre"},
                 style={"width": "100%", "height": "400px"},
+     stylesheet=[{
+                'selector': 'node',
+                'style': {
+                    'content': 'data(label)',
+                    'background-color': 'black',
+                    'line-color': 'black'
+                
+                }
+            },       
+            {
+                'selector': 'edge',
+                'style': {
+                    'content': 'data(label)',
+                    'line-color': 'grey'
+                
+                }
+            },
+            {
+                'selector': 'edge.beige',
+                'style': {
+                    'background-color': 'beige',
+                    'line-color': 'beige'
+                }
+            },
+            {
+                'selector': 'edge.green',
+                'style': {
+                    'background-color': 'green',
+                    'line-color': 'green'
+                }
+            },
+                ],
                 elements=vis_data['cyto'],
             )
 ])
