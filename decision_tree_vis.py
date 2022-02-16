@@ -1,8 +1,6 @@
 __author__ = "Jerry He"
 import pandas as pd
 dat = pd.read_csv("titanic.csv")
-
-
 dat['Age'] = dat['Age'].astype(float) 
 dat['Fare'] = dat['Fare'].astype(float) 
 
@@ -59,8 +57,9 @@ def excel_colname_iter():
         yield from product(ua, repeat=i)
 
 from sklearn.tree import _tree
-def tree2vis(tree, feature_names, target_name='Fraud'):
+def tree2vis(tree, feature_names, target_name='Survived'):
     """Converts scikit learn decision tree to both mermaid & cytoscape formats for visualization"""
+    from sklearn.tree import _tree
     import sys
     tree_ = tree.tree_
     feature2letter = {}
@@ -80,14 +79,12 @@ def tree2vis(tree, feature_names, target_name='Fraud'):
     def walk(node):
         if tree_.feature[node] != _tree.TREE_UNDEFINED:
             name = feature_name[node]
+            print(name)
             treshold = tree_.threshold[node]
             X = "".join(next(e_iter))
             feature2letter[name]=X
             node2varname[X] = name
-            if abs(treshold - 0.5) < 0.01:
-                cyto_nodes.append({"data": {"id": X, "label": name}})
-            else:
-                cyto_nodes.append({"data": {"id": X, "label": "%.1f" %treshold}}) # "%s @ %.1f" %(name, treshold)}})
+            cyto_nodes.append({"data": {"id": X, "label": name.replace("F_Claims_","").replace("F_Claim_","").replace("_"," ")}, "classes":"multiline-auto"})
             seen_features.add(name)
             f1 = "{X}[{name}]".format(X=X, name=name)
             write(f1)
@@ -97,16 +94,21 @@ def tree2vis(tree, feature_names, target_name='Fraud'):
                 cyto_edges[-1]['data']['id'] += ("%s_%d" % (X, next(count_iter)))
             except:
                 pass
+            print(treshold)
             write("{f1}-->|{thresh}| ".format(f1=f1, thresh="<=%.1f" % treshold))
-            cyto_edges.append({"data": {"id":"%s1"% X,"source": X, "label":"%s <= %.1f" % (name, treshold)}})
+            print(X)
+            cyto_edges.append({"data": {"id":"%s1"% X,"source": X, "label":"<=%.1f" % treshold},
+                                "classes":"purple"})
             walk(tree_.children_left[node])
             write(";\n")
             write("{f1}-->|{thresh}| ".format(f1="{X}[{name}]".format(X=X, name=name), thresh=">%.1f" % treshold))
-            cyto_edges.append({"data": {"id":"%s9"% X,"source": X, "label":"> %.1f" % treshold}})
+            cyto_edges.append({"data": {"id":"%s9"% X,"source": X, "label":"> %.1f" % treshold},
+                                "classes":"purple"})
             walk(tree_.children_right[node])
         else:
             results = tree_.value[node][0]
-            name = target_name+": "+str(results[0] > results[1])
+            name = target_name+": "+str(results[0] < results[1])
+            is_fraud = results[0] < results[1]
             if name in seen_features:
                 X = feature2letter[name]
                 cyto_edges[-1]['data']['target']=X
@@ -115,8 +117,13 @@ def tree2vis(tree, feature_names, target_name='Fraud'):
             else:
                 X = "".join(next(e_iter))
                 feature2letter[name]=X
-                cyto_nodes.append({"data": {"id": X, "label": name}})
+                node2varname[X] = name
+                if is_fraud:
+                    cyto_nodes.append({"data": {"id": X, "label": name}, "classes":"red"})
+                else:
+                    cyto_nodes.append({"data": {"id": X, "label": name}, "classes":"green"})
                 cyto_edges[-1]['data']['target']=X
+                cyto_edges[-1]['classes']= 'purple'
                 seen_features.add(name)
                 f1 = "{X}[{name}]".format(X=X, name=name)
                 write(f1)
@@ -124,39 +131,62 @@ def tree2vis(tree, feature_names, target_name='Fraud'):
     contents = output.getvalue()
     output.close()
     st = contents.index("\n")
+    from collections import defaultdict
+    edge_count = defaultdict(list)
+    for i,row in enumerate(cyto_edges):
+        data = row['data']
+        edge_count[(data['source'],data['target'])].append(i)
+    dead_links = {k:v for k,v in edge_count.items() if len(v)>=2}
+    dead_idx = set(chain(*dead_links.values()))
+    for k,v in dead_links.items():
+        for i,row in enumerate(cyto_edges):
+            if row['data']['target'] == k[0]:
+                row['data']['target'] = k[1]   
+    cyto_edges = [row for i,row in enumerate(cyto_edges) if i not in dead_idx]
+    useful_nodes = set()
+    for row in cyto_edges:
+        useful_nodes.add(row['data']['source'])
+        useful_nodes.add(row['data']['target'])
+    cyto_nodes = [row for row in cyto_nodes if row['data']['id'] in useful_nodes]
     return {"mermaid":"graph TD;\n" +contents[st+1:], 
              "cyto":cyto_nodes+cyto_edges,
              "node2varname":node2varname}
 
-def determine_next(df1, node_id):
-    branches = [r for r in vis_data['cyto'] if ('source' in r['data']) and  (r['data']['source']==node_id)]
-    if any(df1.eval(branches[0]['data']['label'])):
-        return branches[0]['data']['target']
-    else:
-        return branches[1]['data']['target']
 
-def get_tree_path(df1):
-    path = ['a']
-    try:
-        while True:
-            path.append(determine_next(df1, path[-1]))
-    except:
-        pass
-    return path
+class TreePathDraw:
+    def __init__(self, cyto):
+        self.cyto = cyto
     
-def find_edge(cyto, source, target):
-    for row in cyto:
-        if 'source' in row['data']:
-            if row['data']['source'] == source:
-                if row['data']['target'] == target:
-                    return row
+    def determine_next(self, df1, node_id):
+        branches = [r for r in self.cyto if ('source' in r['data']) and  (r['data']['source']==node_id)]
+        if any(df1.eval(branches[0]['data']['label'])):
+            return branches[0]['data']['target']
+        else:
+            return branches[1]['data']['target']
+    
+    def get_tree_path(self, df1):
+        path = ['a']
+        try:
+            while True:
+                path.append(self.determine_next(df1, path[-1]))
+        except:
+            pass
+        return path
+    
+    def find_edge(self, source, target):
+        for row in cyto:
+            if 'source' in row['data']:
+                if row['data']['source'] == source:
+                    if row['data']['target'] == target:
+                        return row
+    
+    def color_decision_path(self, df1):
+        path = self.get_tree_path(df1)
+        cyto = self.cyto.copy()
+        for source,target in zip(path, path[1:]):
+            find_edge(cyto, source, target)["classes"]='green'
+        return cyto
 
-def color_decision_path(df1):
-    path = get_tree_path(df1)
-    cyto = tree2vis(clf, dependent_vars)['cyto'].copy()
-    for source,target in zip(path, path[1:]):
-        find_edge(cyto, source, target)["classes"]='green'
-    return cyto
 
 from dash import Dash,html
 from dash_extensions import Mermaid
@@ -207,7 +237,6 @@ cyto.Cytoscape(
                 elements=vis_data['cyto'],
             )
 ])
-            
 
 if __name__ == "__main__":
     app.run_server()
