@@ -23,6 +23,21 @@ for (title, pred_age) in zip(age_iterp.index.tolist(), age_iterp):
     print(title, pred_age)
     dat.loc[(dat.title==title) * dat.Age.isna(), "Age"] = pred_age
 
+clf = tree.DecisionTreeClassifier(max_depth=4)
+clf.fit(newdat[dependent_variables], newdat['Survived'])
+
+def excel_colname_iter():
+    """iterates over excel colnames lowercase"""
+    import string
+    from itertools import product
+    ua = string.ascii_lowercase
+    yield from ua
+    for i in count(2):
+        yield from product(ua, repeat=i)
+
+_pat = re.compile(r'(?<!^)(?=[A-Z])')
+def camelCase2_(name):
+    return _pat.sub('_', name).lower()
 
 # Onehot encoding
 newdat = pd.get_dummies(dat, columns=cat_vars+['title'])
@@ -56,6 +71,10 @@ def excel_colname_iter():
     for i in count(2):
         yield from product(ua, repeat=i)
 
+_pat = re.compile(r'(?<!^)(?=[A-Z])')
+def camelCase2_(name):
+    return 
+name = pattern.sub('_', name).lower()
 from sklearn.tree import _tree
 def tree2vis(tree, feature_names, target_name='Survived'):
     """Converts scikit learn decision tree to both mermaid & cytoscape formats for visualization"""
@@ -84,7 +103,7 @@ def tree2vis(tree, feature_names, target_name='Survived'):
             X = "".join(next(e_iter))
             feature2letter[name]=X
             node2varname[X] = name
-            cyto_nodes.append({"data": {"id": X, "label": name.replace("F_Claims_","").replace("F_Claim_","").replace("_"," ")}, "classes":"multiline-auto"})
+            cyto_nodes.append({"data": {"id": X, "label": camelCase2_(name_).replace("_"," ")}, "classes":"multiline-auto"})
             seen_features.add(name)
             f1 = "{X}[{name}]".format(X=X, name=name)
             write(f1)
@@ -187,11 +206,9 @@ class TreePathDraw:
             find_edge(cyto, source, target)["classes"]='green'
         return cyto
 
-
 from dash import Dash,html
 from dash_extensions import Mermaid
 import dash_cytoscape as cyto
-
 cyto.load_extra_layouts()
 app = Dash()
 
@@ -201,7 +218,7 @@ Mermaid(chart=vis_data['mermaid']),
 cyto.Cytoscape(
                 id="decision-tree",
                 layout={"name": "dagre"},
-                style={"width": "100%", "height": "400px"},
+                style={"width": "100%", "height": "800px"},
      stylesheet=[{
                 'selector': 'node',
                 'style': {
