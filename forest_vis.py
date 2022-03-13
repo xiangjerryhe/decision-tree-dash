@@ -25,7 +25,6 @@ def rf2vis(rf_model, feature_names, target_name='Survived'):
         tree_ = rf_model.estimators_[tree_idx].tree_    
         if tree_.feature[node] != _tree.TREE_UNDEFINED:
             name = feature_name[node]
-            print(name)
             treshold = tree_.threshold[node]
             X = "".join(next(e_iter))
             feature2letter[name]=X
