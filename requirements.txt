@@ -4,3 +4,4 @@ dash-bootstrap-components
 dash-extensions
 dash-cytoscape
 scikit-learn
+optuna
